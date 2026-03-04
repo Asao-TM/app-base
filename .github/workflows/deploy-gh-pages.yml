@@ -1,4 +1,8 @@
+<<<<<<< codex/create-a-successful-app-based-on-strategies-88zbnp
 name: Deploy static site to gh-pages branch
+=======
+name: Deploy static site to GitHub Pages
+>>>>>>> main
 
 on:
   push:
@@ -6,6 +10,7 @@ on:
   workflow_dispatch:
 
 permissions:
+<<<<<<< codex/create-a-successful-app-based-on-strategies-88zbnp
   contents: write
 
 concurrency:
@@ -14,11 +19,27 @@ concurrency:
 
 jobs:
   deploy:
+=======
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+>>>>>>> main
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+<<<<<<< codex/create-a-successful-app-based-on-strategies-88zbnp
       - name: Deploy to gh-pages branch
         uses: peaceiris/actions-gh-pages@v4
         with:
@@ -26,3 +47,18 @@ jobs:
           publish_dir: .
           publish_branch: gh-pages
           force_orphan: true
+=======
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+>>>>>>> main
