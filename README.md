@@ -13,11 +13,11 @@
 
 ## デプロイ（GitHub Pages）
 
-このリポジトリには GitHub Pages へ自動デプロイする Workflow を追加済みです。
+このリポジトリには `gh-pages` ブランチへ自動デプロイする Workflow を追加済みです。
 
 1. GitHub のリポジトリ設定で **Pages** を開く
-2. **Build and deployment** の Source を **GitHub Actions** にする
-3. `work`（または `main` / `master`）ブランチに push する
-4. Actions の `Deploy static site to GitHub Pages` が完了すると公開URLが発行される
+2. Source を **Deploy from a branch** に設定
+3. Branch を **`gh-pages` / `(root)`** に設定
+4. `work`（または `main` / `master`）へ push すると、Workflow が `gh-pages` を更新
 
-> 補足: この実行環境からは GitHub への認証情報がないため、リモートへの push 自体は行っていません。
+> この方式は `configure-pages` API を使わないため、`Resource not accessible by integration` エラーの影響を受けにくい構成です。
