@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>One App Growth OS</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="container">
+      <header>
+        <h1>One App Growth OS</h1>
+        <p>
+          1つのアプリに集中して、集客・オンボーディング・改善を回し切るための
+          実行管理ツール。
+        </p>
+      </header>
+
+      <section class="card">
+        <h2>① アプリの勝ち筋を決める</h2>
+        <label>
+          どんなアプリを作る？
+          <input id="appIdea" type="text" placeholder="例: 生成AI英会話コーチ" />
+        </label>
+        <label>
+          ターゲットのニッチは？
+          <input id="niche" type="text" placeholder="例: TOEIC600〜750点の社会人" />
+        </label>
+        <label>
+          参考にする成功アプリ（2つまで）
+          <input id="refApps" type="text" placeholder="例: Duolingo, Elsa Speak" />
+        </label>
+      </section>
+
+      <section class="card">
+        <h2>② 集客を徹底する（21投稿/日）</h2>
+        <div class="counter-grid">
+          <label>TikTok
+            <input id="tiktok" type="number" min="0" max="7" value="0" />
+          </label>
+          <label>Instagram
+            <input id="instagram" type="number" min="0" max="7" value="0" />
+          </label>
+          <label>YouTube Shorts
+            <input id="youtube" type="number" min="0" max="7" value="0" />
+          </label>
+        </div>
+        <p id="postStatus" class="status">今日の投稿数: 0 / 21</p>
+      </section>
+
+      <section class="card">
+        <h2>③ オンボーディング改善メモ</h2>
+        <textarea
+          id="onboarding"
+          rows="5"
+          placeholder="初回体験の仮説、参考アプリ、改善案を書き出す"
+        ></textarea>
+      </section>
+
+      <section class="card">
+        <h2>④ スケール & 製品改善（時間配分）</h2>
+        <label>
+          マーケティングに使った時間（時間）
+          <input id="marketingHours" type="number" min="0" step="0.5" value="0" />
+        </label>
+        <label>
+          開発に使った時間（時間）
+          <input id="buildHours" type="number" min="0" step="0.5" value="0" />
+        </label>
+        <p id="timeStatus" class="status">マーケ比率: 0%</p>
+      </section>
+
+      <section class="card output">
+        <h2>今日の実行プラン</h2>
+        <button id="generateBtn">プランを生成する</button>
+        <pre id="planOutput">まだプランは生成されていません。</pre>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
