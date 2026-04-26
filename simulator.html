@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>時系列過学習シミュレーター</title>
+  <style>
+    :root {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    }
+    body {
+      margin: 0;
+      padding: 16px;
+      line-height: 1.5;
+    }
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: grid;
+      gap: 16px;
+    }
+    .panel {
+      border: 1px solid;
+      border-radius: 10px;
+      padding: 12px;
+    }
+    .controls {
+      display: grid;
+      gap: 10px;
+    }
+    .chart-wrap {
+      overflow-x: auto;
+    }
+    svg {
+      width: 100%;
+      min-width: 900px;
+      height: 520px;
+      display: block;
+    }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 8px;
+      font-size: 14px;
+    }
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .swatch {
+      width: 24px;
+      height: 0;
+      border-top: 3px solid;
+    }
+    .swatch.dashed {
+      border-top-style: dashed;
+    }
+    .axis-label {
+      font-size: 12px;
+    }
+    .hint {
+      font-size: 13px;
+      opacity: 0.85;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>時系列データにおける過学習と汎化性能シミュレーター</h1>
+
+    <section class="panel controls" aria-label="コントロールパネル">
+      <label for="modelType"><strong>モデルの複雑さ</strong></label>
+      <select id="modelType">
+        <option value="underfit">単純な線形回帰（Underfitting）</option>
+        <option value="goodfit" selected>適切な非線形モデル（Good Fit）</option>
+        <option value="overfit">過学習した複雑なモデル（Overfitting）</option>
+      </select>
+
+      <label for="splitRange"><strong>学習/テスト分割位置: <span id="splitValue">70%</span></strong></label>
+      <input id="splitRange" type="range" min="50" max="90" step="1" value="70" />
+      <div class="hint">分割位置より左側が学習期間（Train）、右側がテスト期間（Test）です。</div>
+    </section>
+
+    <section class="panel chart-wrap">
+      <svg id="chart" viewBox="0 0 1000 520" role="img" aria-label="実績と予測の折れ線グラフ"></svg>
+      <div class="legend">
+        <span class="legend-item"><span class="swatch" style="border-top-style:solid"></span>実績（仮想株価）</span>
+        <span class="legend-item"><span class="swatch dashed"></span>予測線</span>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const DAYS = 100;
+    const data = generateSeries(DAYS);
+
+    const modelTypeEl = document.getElementById('modelType');
+    const splitRangeEl = document.getElementById('splitRange');
+    const splitValueEl = document.getElementById('splitValue');
+    const chartEl = document.getElementById('chart');
+
+    modelTypeEl.addEventListener('change', render);
+    splitRangeEl.addEventListener('input', render);
+
+    render();
+
+    function generateSeries(n) {
+      const out = [];
+      let value = 100;
+      for (let i = 0; i < n; i++) {
+        const trend = 0.18 * i;
+        const seasonal = 3.4 * Math.sin(i * 0.24);
+        const noise = (Math.random() - 0.5) * 2.8;
+        value = 100 + trend + seasonal + noise + (i > 0 ? out[i - 1] * 0.01 - 1 : 0);
+        out.push(value);
+      }
+      return out;
+    }
+
+    function render() {
+      const splitPercent = Number(splitRangeEl.value);
+      splitValueEl.textContent = `${splitPercent}%`;
+
+      const splitIndex = Math.floor((splitPercent / 100) * DAYS);
+      const actual = data;
+      const predicted = buildPrediction(actual, splitIndex, modelTypeEl.value);
+
+      drawChart(actual, predicted, splitIndex);
+    }
+
+    function buildPrediction(series, splitIndex, mode) {
+      if (mode === 'underfit') return predictLinear(series, splitIndex);
+      if (mode === 'goodfit') return predictGoodFit(series, splitIndex);
+      return predictOverfit(series, splitIndex);
+    }
+
+    function predictLinear(series, splitIndex) {
+      const x = Array.from({ length: splitIndex }, (_, i) => i);
+      const y = series.slice(0, splitIndex);
+      const { slope, intercept } = linearRegression(x, y);
+      return Array.from({ length: series.length }, (_, i) => intercept + slope * i);
+    }
+
+    function predictGoodFit(series, splitIndex) {
+      const train = series.slice(0, splitIndex);
+      const smooth = movingAverage(train, 7);
+
+      const predictions = [];
+      for (let i = 0; i < splitIndex; i++) {
+        predictions.push(smooth[Math.max(0, i - 1)]);
+      }
+
+      const tailStart = Math.max(0, splitIndex - 14);
+      const tail = train.slice(tailStart);
+      const x = Array.from({ length: tail.length }, (_, i) => i);
+      const { slope, intercept } = linearRegression(x, tail);
+      const amp = stddev(diff(train.slice(-20))) * 0.8;
+
+      for (let i = splitIndex; i < series.length; i++) {
+        const t = i - splitIndex;
+        const wave = amp * Math.sin(t * 0.45);
+        predictions.push(intercept + slope * (tail.length + t) + wave);
+      }
+      return predictions;
+    }
+
+    function predictOverfit(series, splitIndex) {
+      const predictions = Array.from({ length: splitIndex }, (_, i) => series[i]);
+
+      const recent = series.slice(Math.max(0, splitIndex - 8), splitIndex);
+      const localMomentum = average(diff(recent));
+      const localVol = Math.max(0.5, stddev(diff(recent)));
+      const shockDirection = localMomentum >= 0 ? -1 : 1;
+
+      let current = series[Math.max(0, splitIndex - 1)] || series[0];
+      for (let i = splitIndex; i < series.length; i++) {
+        const t = i - splitIndex + 1;
+        const runaway = shockDirection * (localVol * 1.7) * Math.pow(t, 1.28);
+        const jitter = localVol * 0.7 * Math.sin(t * 1.6);
+        current = current + runaway + jitter;
+        predictions.push(current);
+      }
+      return predictions;
+    }
+
+    function drawChart(actual, predicted, splitIndex) {
+      const width = 1000;
+      const height = 520;
+      const margin = { top: 50, right: 30, bottom: 60, left: 65 };
+      const innerW = width - margin.left - margin.right;
+      const innerH = height - margin.top - margin.bottom;
+
+      const combined = actual.concat(predicted);
+      const yMin = Math.min(...combined) - 3;
+      const yMax = Math.max(...combined) + 3;
+
+      const xScale = (i) => margin.left + (i / (actual.length - 1)) * innerW;
+      const yScale = (v) => margin.top + ((yMax - v) / (yMax - yMin)) * innerH;
+
+      const trainX = xScale(splitIndex - 1);
+
+      chartEl.innerHTML = '';
+
+      chartEl.appendChild(rect(0, 0, width, height, { fill: 'none' }));
+
+      chartEl.appendChild(rect(margin.left, margin.top, Math.max(0, trainX - margin.left), innerH, { 'fill-opacity': '0.08' }));
+      chartEl.appendChild(rect(trainX, margin.top, margin.left + innerW - trainX, innerH, { 'fill-opacity': '0.15' }));
+
+      for (let k = 0; k <= 5; k++) {
+        const val = yMin + (k / 5) * (yMax - yMin);
+        const y = yScale(val);
+        chartEl.appendChild(line(margin.left, y, margin.left + innerW, y, { 'stroke-opacity': '0.2' }));
+        chartEl.appendChild(text(margin.left - 8, y + 4, val.toFixed(1), { 'text-anchor': 'end', class: 'axis-label' }));
+      }
+
+      for (let k = 0; k <= 10; k++) {
+        const i = Math.round((k / 10) * (actual.length - 1));
+        const x = xScale(i);
+        chartEl.appendChild(line(x, margin.top, x, margin.top + innerH, { 'stroke-opacity': '0.08' }));
+        chartEl.appendChild(text(x, margin.top + innerH + 18, `${i + 1}日目`, { 'text-anchor': 'middle', class: 'axis-label' }));
+      }
+
+      chartEl.appendChild(path(toPath(actual, xScale, yScale), {
+        fill: 'none',
+        'stroke-width': '2.5'
+      }));
+
+      chartEl.appendChild(path(toPath(predicted, xScale, yScale), {
+        fill: 'none',
+        'stroke-width': '2.5',
+        'stroke-dasharray': '8 6'
+      }));
+
+      chartEl.appendChild(line(margin.left, margin.top + innerH, margin.left + innerW, margin.top + innerH, {}));
+      chartEl.appendChild(line(margin.left, margin.top, margin.left, margin.top + innerH, {}));
+      chartEl.appendChild(line(trainX, margin.top, trainX, margin.top + innerH, { 'stroke-dasharray': '4 4', 'stroke-width': '1.5' }));
+
+      chartEl.appendChild(text(width / 2, 24, '実績株価と予測線（学習期間 / テスト期間）', { 'text-anchor': 'middle', 'font-size': '18', 'font-weight': '700' }));
+      chartEl.appendChild(text(width / 2, height - 10, '日数', { 'text-anchor': 'middle', class: 'axis-label' }));
+      chartEl.appendChild(text(16, height / 2, '価格', { 'text-anchor': 'middle', class: 'axis-label', transform: `rotate(-90 16 ${height / 2})` }));
+      chartEl.appendChild(text((margin.left + trainX) / 2, margin.top + 22, '学習期間（Train）', { 'text-anchor': 'middle' }));
+      chartEl.appendChild(text((trainX + margin.left + innerW) / 2, margin.top + 22, 'テスト期間（Test）', { 'text-anchor': 'middle' }));
+    }
+
+    function toPath(values, xScale, yScale) {
+      return values.map((v, i) => `${i === 0 ? 'M' : 'L'} ${xScale(i).toFixed(2)} ${yScale(v).toFixed(2)}`).join(' ');
+    }
+
+    function linearRegression(x, y) {
+      const n = x.length;
+      const sx = x.reduce((a, b) => a + b, 0);
+      const sy = y.reduce((a, b) => a + b, 0);
+      const sxy = x.reduce((acc, xi, i) => acc + xi * y[i], 0);
+      const sxx = x.reduce((acc, xi) => acc + xi * xi, 0);
+      const slope = (n * sxy - sx * sy) / Math.max(1e-9, (n * sxx - sx * sx));
+      const intercept = (sy - slope * sx) / n;
+      return { slope, intercept };
+    }
+
+    function movingAverage(arr, window) {
+      const out = [];
+      for (let i = 0; i < arr.length; i++) {
+        const from = Math.max(0, i - window + 1);
+        const sub = arr.slice(from, i + 1);
+        out.push(average(sub));
+      }
+      return out;
+    }
+
+    function diff(arr) {
+      if (arr.length < 2) return [0];
+      const out = [];
+      for (let i = 1; i < arr.length; i++) out.push(arr[i] - arr[i - 1]);
+      return out;
+    }
+
+    function average(arr) {
+      if (!arr.length) return 0;
+      return arr.reduce((a, b) => a + b, 0) / arr.length;
+    }
+
+    function stddev(arr) {
+      const m = average(arr);
+      const variance = average(arr.map(v => (v - m) ** 2));
+      return Math.sqrt(variance);
+    }
+
+    function node(tag, attrs = {}) {
+      const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+      Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, v));
+      return el;
+    }
+
+    function rect(x, y, w, h, attrs = {}) {
+      return node('rect', { x, y, width: w, height: h, ...attrs });
+    }
+
+    function line(x1, y1, x2, y2, attrs = {}) {
+      return node('line', { x1, y1, x2, y2, ...attrs });
+    }
+
+    function path(d, attrs = {}) {
+      return node('path', { d, ...attrs });
+    }
+
+    function text(x, y, t, attrs = {}) {
+      const el = node('text', { x, y, ...attrs });
+      el.textContent = t;
+      return el;
+    }
+  </script>
+</body>
+</html>
